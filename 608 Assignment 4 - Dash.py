@@ -1,11 +1,17 @@
+'''DATA 608 Assignment 4 - Dash
+Author: Magnus Skonberg
+Date: March 27th 2021'''
+
+###......................................................................................###
+
+
+###LIBRARIES
 import dash
 import dash_html_components as html
 import dash_core_components as dcc
 from dash.dependencies import Input, Output
 
 import pandas as pd
-from pandas.api.types import CategoricalDtype
-import numpy as np
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go 
