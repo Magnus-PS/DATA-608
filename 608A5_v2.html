@@ -31,23 +31,18 @@
 
         function twenty_mults(number){
 
-            //initialize variables
             var table_script = "<table>"; //initialize the table
             
             //populate array of multiples
             for (i = 1; i <= 20; i++) {
                 //new rows created for 1st, 5th, 9th, 13th, or 17th multiples
-                if ((i-1) % 4 == 0) { 
-                    table_script += "<tr>"; 
-                };
+                if ((i-1) % 4 == 0) {table_script += "<tr>";};
                 //add the element to the table
                 table_script += "<td>" + (number * i) + "</td>";
                 //close rows on 4th, 8th, 12th, 16th, or 20th multiples
-                if (i % 4 == 0){
-                    table_script = table_script + "</tr>"};
+                if (i % 4 == 0){table_script = table_script + "</tr>"};
             };
-            //upon exiting the for loop, close table
-            table_script = table_script + '</table>';
+            table_script = table_script + '</table>'; //upon exiting the for loop, close table
             return table_script
         }
         </script>
