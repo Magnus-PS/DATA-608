@@ -1,0 +1,64 @@
+<html>
+
+    <head>
+        <title>608 Assignment 5</title>
+        <h3>The purpose of this assignment is to create 2 functions on one HTML page: </h3>
+        <p>1. reverse any word that's typed in, and </p>
+        <p>2. take an input number and print the first 20 multiples of that number (in order) in a 5 x 4 table. </p>
+        <br>
+    </head>
+
+    <body>
+    <script type="application/javascript">
+    
+    function rev_word(word){
+        var word_split = word.split(""); // split string into array of substrings between each character
+        var reversed = word_split.reverse(); //reverse array elements
+        var joined = reversed.join(""); //join array elements
+        return joined;
+    };
+    </script>
+    
+    <form>
+        Type in a word, hit 'Enter' and the reverse will be output in an alert message: <input type="str" id="word">
+        <input type="button" value="Enter" 
+        onClick="window.alert(rev_word(document.getElementById('word').value));"> 
+    </form>
+    </body>
+
+    <body>
+        <script type="application/javascript">
+
+        function twenty_mults(number){
+
+            //initialize variables
+            var table_script = "<table>"; //initialize the table
+            
+            //populate array of multiples
+            for (i = 1; i <= 20; i++) {
+                //new rows created for 1st, 5th, 9th, 13th, or 17th multiples
+                if ((i-1) % 4 == 0) { 
+                    table_script += "<tr>"; 
+                };
+                //add the element to the table
+                table_script += "<td>" + (number * i) + "</td>";
+                //close rows on 4th, 8th, 12th, 16th, or 20th multiples
+                if (i % 4 == 0){
+                    table_script = table_script + "</tr>"};
+            };
+            //upon exiting the for loop, close table
+            table_script = table_script + '</table>';
+            return table_script
+        }
+        </script>
+        
+        <form>
+            Type in a number, hit 'Enter' and the first 20 multiples of the number will be output as a 5 row x 4 column table below: <input type="number" id="number">
+            <input type="button" value="Enter" 
+            onClick="document.getElementById('output_table').innerHTML = twenty_mults(document.getElementById('number').value);">
+        </form>
+        
+        <p id="output_table"></p>
+
+    </body>
+</html>
