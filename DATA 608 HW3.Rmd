@@ -1,0 +1,279 @@
+---
+title: "DATA 608 HW3"
+author: "Magnus Skonberg"
+date: "`r Sys.Date()`"
+output: 
+    html_document:
+        toc: true
+        toc_float: true
+        number_sections: false
+        theme: cerulean
+        highlight: tango
+        font-family: "Arial"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#load relevant libraries
+library(rsconnect)
+library(shiny)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+
+#authorize shinyapp acct
+rsconnect::setAccountInfo(name='magnus-ps',
+			  token='A5425F3560D694EC83FB219DA2A85466',
+			  secret='FKwToPTDgwSMVRZXX6oRhCdG2T1VPXaEzq24eMJu')
+
+```
+
+## Background
+
+The purpose of the assignment was to explore *interactive visualization in R using the 'shiny' package*.
+
+...............................................................................
+
+
+## Exploratory Data Analysis (EDA)
+
+Before preparing our data and our interactive 'shiny' visualizations, we load our data in and explore it.
+
+```{r, message=F, results='hide'}
+#Read in mortality data raw
+cdc_data <- read.csv("https://raw.githubusercontent.com/charleyferrari/CUNY_DATA_608/master/module3/data/cleaned-cdc-mortality-1999-2010-2.csv", header= TRUE)
+
+#convert fields to lowercase
+names(cdc_data) <- lapply(names(cdc_data), tolower)
+```
+
+We gain an understanding of row and column number as well as data type via the built-in glimpse() function, explore the number of unique observations for cause of death, state, and year, and then peruse the first 6 entries:
+
+```{r, message=F}
+#High level EDA:
+##glimpse
+glimpse(cdc_data)
+
+##character fields
+#length(unique(cdc_data$icd.chapter)) #19 unique death categorizations
+#length(unique(cdc_data$state)) #51 states (DC incl.)
+#length(unique(cdc_data$year)) #12 years
+
+##first 6 entries
+head(cdc_data)
+
+```
+
+We observe that our data has:
+
+* 9,961 rows and 6 columns,
+* 2 categorical and 4 numeric variables,
+* 19 unique causes of death,
+* 51 states (including Washington DC), and
+* across 12 years
+
+We'll *primarily* be focused on the crude rate as the y variable in our visualizations and the above exploration provides some context regarding its range as well as some of the other variables under consideration.
+
+As a next step we'll move on to Question 1 and its corresponding static visualization.
+
+................................................................................
+
+
+## Question 1
+
+**As a researcher, you frequently compare mortality rates from particular causes across different States. You need a visualization that will let you see (for 2010 only) the crude mortality rate, across all States, from one cause (for example, Neoplasms, which are effectively cancers). Create a visualization that allows you to rank States by crude mortality for each cause of death.**
+
+### Static Visualization
+
+Being that Q1 asks specifically for data regarding the year 2010 and we'll be selecting the cause of death via the shiny app we're to build, we'll filter for 'hold values' here, ranked based on their crude rate, and output and coordinate flipped bar chart with state as our x axis and crude rate as our y axis:
+
+```{r}
+#pre-filter for 2010 and particular case
+neo <- filter(cdc_data, year == 2010 & icd.chapter == 'Neoplasms') %>% arrange(crude.rate)
+
+ ggplot(neo, aes(x=reorder(state, -crude.rate), y=crude.rate))+
+     geom_col(fill='steelblue') +
+     coord_flip() +
+     geom_text(aes(label=crude.rate), size = 2, hjust = -0.1)+
+     labs(title = "Crude Rate of Neoplasms per State in 2010", x= "State", y = "Crude Rate") +
+     theme_minimal()
+
+```
+
+The above plot confirms the efficacy of our plotting code. Being that we can now be confident in our ability to plot our data (based on the static visualization above), we'll move on to an interactive shiny implementation.
+
+### Interactive (Shiny) Visualization
+
+We'll follow a standard shiny app implementation and build the user interface with a header, cause of death selection side bar, and plot with a basic description as the main feature:
+
+```{r}
+#shiny app UI
+
+ui <- fluidPage(
+    headerPanel('Exploring Causes of Death Across State Lines in 2010'),
+    
+    sidebarLayout(
+        sidebarPanel(
+            selectInput(
+                inputId = 'cause', 
+                label = 'Cause of Death:', 
+                choices = unique(cdc_data$icd.chapter))
+                ),
+        
+        mainPanel(
+            #h3('2010 State Mortality Rates'),
+            htmlOutput(outputId = 'desc'), #plot description
+            plotOutput('plot1')
+            )
+    )
+)
+
+#shiny app server
+server <- shinyServer(function(input, output, session){
+    selectedData <- reactive({
+        filter(cdc_data, year == 2010 & icd.chapter == input$cause) %>% arrange(crude.rate)
+    })
+    output$desc <- renderText({
+        paste('Death rate per 100,000 persons for ', input$cause)
+    })
+    output$plot1 <- renderPlot({
+         ggplot(selectedData(), aes(x=reorder(state, -crude.rate), y=crude.rate))+
+            geom_col(fill='steelblue') + #"steelblue"
+            coord_flip() +
+            geom_text(aes(label=crude.rate), size = 2, hjust = -0.1)+
+            labs(x= "State", y = "Crude Rate = Count / Population * 100,000")+
+            theme_minimal()
+        
+    }
+    )
+})
+
+shinyApp(ui = ui, server = server)
+deployApp()
+```
+
+The default cause of death is `Certain infectious and parasitic diseases`, otherwise if the user chooses a different cause, our reactive endpoint (`output$plot1`) reacts to the reactive source (`input$cause`), and produces an updated plot with an updated description (`output$desc`).
+
+The rate of death ascends as we move down the plot. Thus, the lowest rate of death is at the top and the highest rate of death is situated at the bottom, making for an easy way to compare mortality rates from particular causes across different States (for 2010).
+
+................................................................................
+
+
+## Question 2
+
+**Often you are asked whether particular States are improving their mortality rates (per cause) faster than, or slower than, the national average. Create a visualization that lets your clients see this for themselves for one cause of death at a time. Keep in mind that the national average should be weighted by the national population.**
+
+We'll start by performing "background calculations" since we weren't provided with a national average in our original dataset. We compute the national average per year and cause, select variables of interest for our US (national average) data set and the OG (original) data set, and then combine and verify that our combination was successful via the built-in nrow() function:
+
+```{r}
+#Setup / Background Calculations
+
+##Compute Nat'l average per year and cause
+US <- cdc_data %>%
+    group_by(icd.chapter, year) %>% #grouo by cause and year
+    mutate(crude.rate = round((sum(deaths) / sum(population)) * 100000, 1)) %>% #compute crude rate per year
+    mutate(state = "US") %>% #incorporate 'US' observation
+    ungroup() %>%
+    distinct(icd.chapter, year, .keep_all = TRUE) %>% #keep only distinct causes and years (212)
+    select(icd.chapter, year, crude.rate, state) %>% #select columns of interest
+    group_by(icd.chapter, year) #regroup based on cause and year
+
+US$state <- as.character(US$state)
+#head(US) #verify
+
+##Exclude impertinent variables from original data set
+OG <- cdc_data %>%
+    select(icd.chapter, year, crude.rate, state) %>%
+    group_by(icd.chapter, year)
+
+#head(OG) #verify
+
+##Combine data sets
+combined <- rbind(OG, US)
+#nrow(combined) #10173 = 9961 + 212
+
+```
+
+With our data in a form that we can operate upon, we move on to visualizing a our data in a static, simplified manner before moving on to the interactive form.
+
+### Static Visualization
+
+Being that Q2 asks specifically for data comparing cause of death for a state vs. the national average, we'll be selecting the cause of death and the state via the shiny app we're to build and so we'll filter for 'hold values' here. 
+
+We'll then output a line chart with two lines, colored based on state value, with year serving as our x axis and crude rate as our y axis.
+
+```{r}
+#pre-filter for 2010 and particular case
+neo_2 <- filter(combined, icd.chapter == 'Neoplasms' & (state == 'US' | state == 'TX'))
+neo_2
+
+ggplot(neo_2, aes(x=year, y=crude.rate/10))+
+    geom_line(aes(color=state), lwd=2)+ #lwd for thicker lines
+    scale_color_manual(values = c("darkred", "steelblue"))+
+    labs(title = "Crude Rate of Neoplasms for Texas vs. the US National Average", x= "Year", y = "Crude Rate") +
+    theme_minimal()
+
+```
+
+With confidence in our ability to plot, we move on to our shiny app implementation.
+
+### Interactive (Shiny) Visualization
+
+The major differences here (vs. our 1st shiny app) are:
+
+* selecting 2 inputs rather than just 1,
+* filtering our data for cause, state, and Nat'l avg (US), and
+* the fact that we're using a line plot here rather than a bar plot.
+
+We build the user interface with a header, cause of death and state selection side bar, and a plot with a basic description as the main feature:
+
+```{r}
+#shiny app UI
+
+ui <- fluidPage(
+    headerPanel('State vs. National Average Mortality Rates'),
+    
+    sidebarLayout(
+        sidebarPanel(
+            selectInput(
+                inputId = 'cause', 
+                label = 'Cause of Death:', 
+                choices = unique(cdc_data$icd.chapter)),
+            selectInput(
+                    inputId = 'state', 
+                    label = 'State:', 
+                    choices = unique(cdc_data$state))
+                    ),
+        
+        mainPanel(
+            htmlOutput(outputId = 'desc2'), #plot description
+            plotOutput('plot2')
+            )
+    )
+)
+
+#shiny app server
+server <- shinyServer(function(input, output, session){
+    selectedData <- reactive({
+        filter(combined, icd.chapter == input$cause & (state == 'US' | state == input$state))
+    })
+    output$desc2 <- renderText({
+        paste('Death rate per 100,000 persons for ', input$cause)
+    })
+    output$plot2 <- renderPlot({
+        ggplot(selectedData(), aes(x=year, y=crude.rate/10))+
+            geom_line(aes(color=state),lwd=2)+
+            scale_color_manual(values = c("darkred", "steelblue"))+
+            labs(x= "Year", y = "Crude Rate") +
+            theme_minimal()
+    }
+    )
+})
+
+shinyApp(ui = ui, server = server)
+deployApp()
+```
+The default cause of death is `Certain infectious and parasitic diseases` while the default state is 'AL' (Alabama). Otherwise, if the user chooses a different cause and state, our reactive endpoint (`output$plot2`) reacts to the reactive sources (`input$cause`, `input$state`), and produces an updated plot with an updated description (`output$desc2`).
+
+The national average is plotted in blue while the state of interest is plotted in red. The difference between the lines show whether a state is over or under-performing vs. the national average and/or improving their mortality rates (per cause) faster than, or slower than, the national average.
